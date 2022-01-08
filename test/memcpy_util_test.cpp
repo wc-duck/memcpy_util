@@ -635,7 +635,7 @@ TEST memcpy_rectflipv_even()
 		     	 	 	 'H', 'G', 'F', 'E' };
 
 	uint8_t dst[sizeof(buffer)] = {0};
-	memcpy_rectflipv( dst, buffer, 4, 4, 4, 4 );
+	memcpy_rectflipv( dst, buffer, 4, 4, 4, 4, sizeof(uint8_t) );
 	ASSERT_MEMEQ(dst, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -652,7 +652,7 @@ TEST memcpy_rectflipv_uneven()
 			 	 	 	 'G', 'F', 'E', 'D', 'C' };
 
 	uint8_t dst[sizeof(buffer)] = {0};
-	memcpy_rectflipv( dst, buffer, 3, 5, 5, 5 );
+	memcpy_rectflipv( dst, buffer, 3, 5, 5, 5, sizeof(uint8_t) );
 	ASSERT_MEMEQ(dst, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -674,10 +674,11 @@ TEST memcpy_rectflipv_subrect()
 
 	uint8_t dst[sizeof(buffer)] = {0};
 	memcpy_rectflipv( dst, buffer, 
-                      3,   // linecnt
-                      2,   // linelen
-                      4,   // dststride
-                      4 ); // srcstride
+                      3, // linecnt
+                      2, // linelen
+                      4, // dststride
+                      4, // srcstride
+					  sizeof(uint8_t) );
 	ASSERT_MEMEQ(dst, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -695,7 +696,7 @@ TEST memmove_rectflipv_even()
 		     	 	 	 'D', 'C', 'B', 'A',
 		     	 	 	 'H', 'G', 'F', 'E' };
 
-	memmove_rectflipv( buffer, buffer, 4, 4, 4, 4 );
+	memmove_rectflipv( buffer, buffer, 4, 4, 4, 4, sizeof(uint8_t) );
 	ASSERT_MEMEQ(buffer, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -711,7 +712,7 @@ TEST memmove_rectflipv_uneven()
 			 	 	 	 'B', 'A', 'h', 'g', 'f',
 			 	 	 	 'G', 'F', 'E', 'D', 'C' };
 
-	memmove_rectflipv( buffer, buffer, 3, 5, 5, 5 );
+	memmove_rectflipv( buffer, buffer, 3, 5, 5, 5, sizeof(uint8_t) );
 	ASSERT_MEMEQ(buffer, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -732,14 +733,17 @@ TEST memmove_rectflipv_subrect()
 						 'E', 'F', 'G', 'H' };
 
 	memmove_rectflipv( buffer, buffer, 
-                       3,   // linecnt
-                       2,   // linelen
-                       4,   // dststride
-                       4 ); // srcstride
+                       3, // linecnt
+                       2, // linelen
+                       4, // dststride
+                       4, // srcstride
+					   sizeof(uint8_t) );
 	ASSERT_MEMEQ(buffer, expect);
 
     return GREATEST_TEST_RES_PASS;
 }
+
+// TODO: tests for some different sizes for memXXX_rectflipv
 
 GREATEST_SUITE( swap )
 {
