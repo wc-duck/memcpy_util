@@ -74,14 +74,13 @@ UBENCH_EX(swap, small)
 
 UBENCH_EX(swap, big)
 {
-    const size_t BUF_SZ = 8 * 1024;
+    const size_t BUF_SZ = 2048 * 2048;
 	uint8_t* b1 = alloc_random_buffer<uint8_t>(BUF_SZ);
     uint8_t* b2 = alloc_random_buffer<uint8_t>(BUF_SZ);
 
 	UBENCH_DO_BENCHMARK()
 	{
 		memswap(b1, b2, BUF_SZ);
-        UBENCH_DO_NOTHING(b1);
 	}
 
     free(b1);
