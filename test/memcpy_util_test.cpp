@@ -484,7 +484,7 @@ TEST memcpy_rectfliph_even()
 						 'a', 'b', 'c', 'd' };
 
 	uint8_t dst[sizeof(buffer)] = {0};
-	memcpy_rectfliph( dst, buffer, 4, 4, 4, 4 );
+	memcpy_rectfliph( dst, buffer, 4, 4, 4, 4, 1 );
 	ASSERT_MEMEQ(dst, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -505,7 +505,7 @@ TEST memcpy_rectfliph_uneven()
 						 'a', 'b', 'c', 'd' };
 
 	uint8_t dst[sizeof(buffer)] = {0};
-	memcpy_rectfliph( dst, buffer, 5, 4, 4, 4 );
+	memcpy_rectfliph( dst, buffer, 5, 4, 4, 4, 1 );
 	ASSERT_MEMEQ(dst, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -526,7 +526,7 @@ TEST memcpy_rectfliph_subrect()
 						  0,   0,  0, 0 };
 
 	uint8_t dst[sizeof(buffer)] = {0};
-	memcpy_rectfliph( dst, buffer, 3, 2, 4, 4 );
+	memcpy_rectfliph( dst, buffer, 3, 2, 4, 4, 1 );
 	ASSERT_MEMEQ(dst, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -548,7 +548,7 @@ TEST memmove_rectfliph_even()
 						 'e', 'f', 'g', 'h',
 						 'a', 'b', 'c', 'd' };
 
-	memmove_rectfliph( buffer, buffer, 4, 4, 4, 4 );
+	memmove_rectfliph( buffer, buffer, 4, 4, 4, 4, 1 );
 	ASSERT_MEMEQ(buffer, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -568,7 +568,7 @@ TEST memmove_rectfliph_uneven()
 						 'e', 'f', 'g', 'h',
 						 'a', 'b', 'c', 'd' };
 
-	memmove_rectfliph( buffer, buffer, 5, 4, 4, 4 );
+	memmove_rectfliph( buffer, buffer, 5, 4, 4, 4, 1 );
 	ASSERT_MEMEQ(buffer, expect);
 
     return GREATEST_TEST_RES_PASS;
@@ -591,7 +591,7 @@ TEST memmove_rectfliph_subrect()
 							 'A', 'B',   'C', 'D',
 							 'E', 'F',   'G', 'H' };
 
-		memmove_rectfliph( buffer, buffer, 3, 2, 4, 4 );
+		memmove_rectfliph( buffer, buffer, 3, 2, 4, 4, 1 );
 		ASSERT_MEMEQ(buffer, expect);
 	}
 
@@ -611,7 +611,7 @@ TEST memmove_rectfliph_subrect()
 							 'E', 'F',   'G', 'H',
 							 'I', 'J',   'K', 'L' };
 
-		memmove_rectfliph( buffer, buffer, 4, 2, 4, 4 );
+		memmove_rectfliph( buffer, buffer, 4, 2, 4, 4, 1 );
 		ASSERT_MEMEQ(buffer, expect);
 	}
 

@@ -40,10 +40,18 @@ static void fill_with_random_data(uint8_t *arr, size_t size)
         arr[i] = (uint8_t)rand();
 }
 
-template<size_t ARR_SIZE>
-static void fill_with_random_data(uint8_t(&arr)[ARR_SIZE])
+template<typename T, size_t ARR_SIZE>
+static void fill_with_random_data(T(&arr)[ARR_SIZE])
 {
-    fill_with_random_data(arr, ARR_SIZE);
+    fill_with_random_data((uint8_t*)arr, ARR_SIZE * sizeof(T));
+}
+
+template<typename T>
+T* alloc_random_buffer(size_t item_cnt)
+{
+    T* buff = (T*)malloc(item_cnt * sizeof(T));
+    fill_with_random_data((uint8_t*)buff, item_cnt * sizeof(T));
+    return buff;
 }
 
 ///////////////////////////////////////////////////////////////
@@ -60,20 +68,20 @@ UBENCH_EX(swap, small)
 	UBENCH_DO_BENCHMARK()
 	{
 		memswap(b1, b2, sizeof(b1));
+        UBENCH_DO_NOTHING(b1);
 	}
 }
 
 UBENCH_EX(swap, big)
 {
     const size_t BUF_SZ = 8 * 1024;
-	uint8_t* b1 = (uint8_t*)malloc(BUF_SZ);
-    uint8_t* b2 = (uint8_t*)malloc(BUF_SZ);
-    fill_with_random_data(b1, BUF_SZ);
-    fill_with_random_data(b2, BUF_SZ);
+	uint8_t* b1 = alloc_random_buffer<uint8_t>(BUF_SZ);
+    uint8_t* b2 = alloc_random_buffer<uint8_t>(BUF_SZ);
 
 	UBENCH_DO_BENCHMARK()
 	{
 		memswap(b1, b2, BUF_SZ);
+        UBENCH_DO_NOTHING(b1);
 	}
 
     free(b1);
@@ -89,53 +97,115 @@ UBENCH_EX(swap, big)
 //                      memcpy_rectfliph                     //
 ///////////////////////////////////////////////////////////////
 
-UBENCH_EX(memcpy_rectfliph, big)
-{
-    const size_t LINE_CNT = 2048;
-    const size_t LINE_LEN = 2048;
-    const size_t BUF_SZ = LINE_CNT * LINE_LEN;
-	uint8_t* b1 = (uint8_t*)malloc(BUF_SZ);
-    uint8_t* b2 = (uint8_t*)malloc(BUF_SZ);
-    fill_with_random_data(b1, BUF_SZ);
-
-	UBENCH_DO_BENCHMARK()
-	{
-		memcpy_rectfliph(b2, b1, 
-                         LINE_CNT, LINE_LEN,
-                         LINE_LEN, LINE_LEN);
-	}
-
-    free(b1);
+#define BENCH_MEMCPY_RECTFLIPH_SIZE(TYPE, LINE_CNT, LINE_LEN)  \
+	TYPE* b1 = alloc_random_buffer<TYPE>(LINE_CNT * LINE_LEN); \
+    TYPE* b2 = alloc_random_buffer<TYPE>(LINE_CNT * LINE_LEN); \
+                                                               \
+	UBENCH_DO_BENCHMARK()                                      \
+	{                                                          \
+		UBENCH_DO_NOTHING(                                     \
+            memcpy_rectfliph(b2, b1,                           \
+                             LINE_CNT, LINE_LEN,               \
+                             LINE_LEN, LINE_LEN,               \
+                             sizeof(b1[0]))                    \
+        );                                                     \
+	}                                                          \
+                                                               \
+    free(b1);                                                  \
     free(b2);
-}
+
+UBENCH_EX(memcpy_rectfliph, uint8_t)  { BENCH_MEMCPY_RECTFLIPH_SIZE( uint8_t, 2048, 2048); }
+UBENCH_EX(memcpy_rectfliph, uint16_t) { BENCH_MEMCPY_RECTFLIPH_SIZE(uint16_t, 1024, 2048); }
+UBENCH_EX(memcpy_rectfliph, uint32_t) { BENCH_MEMCPY_RECTFLIPH_SIZE(uint32_t, 1024, 1024); }
+UBENCH_EX(memcpy_rectfliph, uint64_t) { BENCH_MEMCPY_RECTFLIPH_SIZE(uint64_t,  512, 1024); }
+// TODO: benchmark "uneven size items!"
 
 
 ///////////////////////////////////////////////////////////////
-//                      movecpy_rectfliph                    //
+//                      memmove_rectfliph                    //
 ///////////////////////////////////////////////////////////////
 
-UBENCH_EX(memmove_rectfliph, big)
-{
-    const size_t LINE_CNT = 2048;
-    const size_t LINE_LEN = 2048;
-    const size_t BUF_SZ = LINE_CNT * LINE_LEN;
-	uint8_t* b1 = (uint8_t*)malloc(BUF_SZ);
-    fill_with_random_data(b1, BUF_SZ);
-
-	UBENCH_DO_BENCHMARK()
-	{
-		memmove_rectfliph(b1, b1, 
-                          LINE_CNT, LINE_LEN,
-                          LINE_LEN, LINE_LEN);
-	}
-
+#define BENCH_MEMMOVE_RECTFLIPH_SIZE(TYPE, LINE_CNT, LINE_LEN) \
+	TYPE* b1 = alloc_random_buffer<TYPE>(LINE_CNT * LINE_LEN); \
+                                                               \
+	UBENCH_DO_BENCHMARK()                                      \
+	{                                                          \
+        UBENCH_DO_NOTHING(                                     \
+		    memmove_rectfliph(b1, b1,                          \
+                              LINE_CNT, LINE_LEN,              \
+                              LINE_LEN, LINE_LEN,              \
+                              sizeof(b1[0]))                   \
+        );                                                     \
+	}                                                          \
     free(b1);
-}
+
+UBENCH_EX(memmove_rectfliph, uint8_t)  { BENCH_MEMMOVE_RECTFLIPH_SIZE( uint8_t, 2048, 2048);  }
+UBENCH_EX(memmove_rectfliph, uint16_t) { BENCH_MEMMOVE_RECTFLIPH_SIZE(uint16_t, 1024, 2048); }
+UBENCH_EX(memmove_rectfliph, uint32_t) { BENCH_MEMMOVE_RECTFLIPH_SIZE(uint32_t, 1024, 1024); }
+UBENCH_EX(memmove_rectfliph, uint64_t) { BENCH_MEMMOVE_RECTFLIPH_SIZE(uint64_t,  512, 1024); }
+// TODO: benchmark "uneven size items!"
+
+///////////////////////////////////////////////////////////////
+//                      memcpy_rectfliph                     //
+///////////////////////////////////////////////////////////////
+
+#define BENCH_MEMCPY_RECTFLIPV_SIZE(TYPE, LINE_CNT, LINE_LEN)   \
+	TYPE* b1 = alloc_random_buffer<TYPE>(LINE_CNT * LINE_LEN);  \
+    TYPE* b2 = alloc_random_buffer<TYPE>(LINE_CNT * LINE_LEN);  \
+                                                                \
+	UBENCH_DO_BENCHMARK()                                       \
+	{                                                           \
+		UBENCH_DO_NOTHING(                                      \
+            memcpy_rectflipv(b2, b1,                            \
+                             LINE_CNT, LINE_LEN,                \
+                             LINE_LEN, LINE_LEN,                \
+                             sizeof(b1[0]))                     \
+        );                                                      \
+	}                                                           \
+                                                                \
+    free(b1);                                                   \
+    free(b2);
+
+UBENCH_EX(memcpy_rectflipv, uint8_t)  { BENCH_MEMCPY_RECTFLIPV_SIZE( uint8_t, 2048, 2048);  }
+UBENCH_EX(memcpy_rectflipv, uint16_t) { BENCH_MEMCPY_RECTFLIPV_SIZE(uint16_t, 1024, 2048); }
+UBENCH_EX(memcpy_rectflipv, uint32_t) { BENCH_MEMCPY_RECTFLIPV_SIZE(uint32_t, 1024, 1024); }
+UBENCH_EX(memcpy_rectflipv, uint64_t) { BENCH_MEMCPY_RECTFLIPV_SIZE(uint64_t,  512, 1024); }
+// TODO: benchmark "uneven size items!"
+
+///////////////////////////////////////////////////////////////
+//                      memmove_rectfliph                    //
+///////////////////////////////////////////////////////////////
+
+#define BENCH_MEMMOVE_RECTFLIPV_SIZE(TYPE, LINE_CNT, LINE_LEN) \
+	TYPE* b1 = alloc_random_buffer<TYPE>(LINE_CNT * LINE_LEN); \
+                                                               \
+	UBENCH_DO_BENCHMARK()                                      \
+	{                                                          \
+        UBENCH_DO_NOTHING(                                     \
+		    memmove_rectflipv(b1, b1,                          \
+                              LINE_CNT, LINE_LEN,              \
+                              LINE_LEN, LINE_LEN,              \
+                              sizeof(b1[0]))                   \
+        );                                                     \
+	}                                                          \
+    free(b1);
+
+UBENCH_EX(memmove_rectflipv, uint8_t)  { BENCH_MEMMOVE_RECTFLIPV_SIZE( uint8_t, 2048, 2048);  }
+UBENCH_EX(memmove_rectflipv, uint16_t) { BENCH_MEMMOVE_RECTFLIPV_SIZE(uint16_t, 1024, 2048); }
+UBENCH_EX(memmove_rectflipv, uint32_t) { BENCH_MEMMOVE_RECTFLIPV_SIZE(uint32_t, 1024, 1024); }
+UBENCH_EX(memmove_rectflipv, uint64_t) { BENCH_MEMMOVE_RECTFLIPV_SIZE(uint64_t,  512, 1024); }
+// TODO: benchmark "uneven size items!"
+
 
 UBENCH_STATE();
 
 int main(int argc, const char *const argv[])
 {
+#if defined(__clang__)
+    printf("Clang\n");
+#elif defined(__GNUC__)
+    printf("GCC\n");
+#endif
     srand(1337);
     return ubench_main(argc, argv);
 }

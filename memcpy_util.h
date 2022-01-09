@@ -172,9 +172,10 @@ inline void* memmove_rectrotl_x( void* dst, void* src, size_t linecnt, size_t li
  * @param dst destination buffer where to start the copy
  * @param src source buffer to copy from.
  * @param lines number of lines to copy from src.
- * @param linelen number of bytes in lines to copy from src.
- * @param dststride number of bytes between each row in dst.
- * @param srcstride number of bytes between each row in src.
+ * @param linelen number of 'items' in lines to copy from src.
+ * @param dststride number of 'items' between each row in dst.
+ * @param srcstride number of 'items' between each row in src.
+ * @param item_size size of 'atom' in a line in bytes.
  *
  * src:             dst:
  * X---+-------+    +-----------+
@@ -189,7 +190,7 @@ inline void* memmove_rectrotl_x( void* dst, void* src, size_t linecnt, size_t li
  * X = src passed to function
  * Y = dst passed to function
  */
-inline void* memcpy_rectfliph( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride );
+inline void* memcpy_rectfliph( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride, size_t item_size );
 
 /**
  * move rect flipped horizontally.
@@ -199,9 +200,10 @@ inline void* memcpy_rectfliph( void* dst, void* src, size_t linecnt, size_t line
  * @param dst destination buffer where to start the copy
  * @param src source buffer to copy from.
  * @param lines number of lines to copy from src.
- * @param linelen number of bytes in lines to copy from src.
- * @param dststride number of bytes between each row in dst.
- * @param srcstride number of bytes between each row in src.
+ * @param linelen number of 'items' in lines to copy from src.
+ * @param dststride number of 'items' between each row in dst.
+ * @param srcstride number of 'items' between each row in src.
+ * @param item_size size of 'atom' in a line in bytes.
  *
  * src:             dst:
  * X---+-------+    +-----------+
@@ -216,7 +218,7 @@ inline void* memcpy_rectfliph( void* dst, void* src, size_t linecnt, size_t line
  * X = src passed to function
  * Y = dst passed to function
  */
-inline void* memmove_rectfliph( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride );
+inline void* memmove_rectfliph( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride, size_t item_size );
 
 /**
  * copy rect flipped vertically.
@@ -510,30 +512,40 @@ inline void* memmove_rectrotl_x( void* dst, void* src, size_t linecnt, size_t li
 	return dst;
 }
 
-inline void* memcpy_rectfliph( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride )
+inline void* memcpy_rectfliph( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride, size_t item_size )
 {
+	// TODO: this is slower than the memmove_-version in non-debug build as GCC inserts a call to memcpy instead of inlining it, making 
+	//       memswap() the faster alternative!
 	uint8_t* d = (uint8_t*)dst;
 	uint8_t* s = (uint8_t*)src;
+	const size_t dststride_bytes = dststride * item_size;
+	const size_t srcstride_bytes = srcstride * item_size;
+	const size_t linelen_bytes   = linelen   * item_size;
 	for( size_t line = 0; line < linecnt; ++line )
-		memcpy( d + ( linecnt - 1 - line ) * dststride, s + ( line * srcstride ), linelen );
+		memcpy( d + ( linecnt - 1 - line ) * dststride_bytes, s + ( line * srcstride_bytes ), linelen_bytes );
 
 	return dst;
 }
 
-inline void* memmove_rectfliph( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride )
+inline void* memmove_rectfliph( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride, size_t item_size )
 {
 	// TODO: it might be worth doing an overlap-check here and use memcpy_rectfliph if they don't overlap as that is WAY
 	//       faster!
 	uint8_t* d = (uint8_t*)dst;
 	uint8_t* s = (uint8_t*)src;
+	const size_t dststride_bytes = dststride * item_size;
+	const size_t srcstride_bytes = srcstride * item_size;
+	const size_t linelen_bytes   = linelen   * item_size;
 	for( size_t line = 0; line < linecnt / 2; ++line )
-		memswap( d + ( linecnt - 1 - line ) * dststride, s + ( line * srcstride ), linelen );
+		memswap( d + ( linecnt - 1 - line ) * dststride_bytes, s + ( line * srcstride_bytes ), linelen_bytes );
 
 	return dst;
 }
 
 inline void* memcpy_rectflipv( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride, size_t item_size )
 {
+	// TODO: handle alignment of buffers as the macro casts array to different types.
+
 	#define MEMCPY_RECTFLIPV_GENERIC(type)                                                     \
 		{                                                                                      \
 			uint8_t* d = (uint8_t*)dst;                                                        \
@@ -566,20 +578,22 @@ inline void* memcpy_rectflipv( void* dst, void* src, size_t linecnt, size_t line
 
 inline void* memmove_rectflipv( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride, size_t item_size )
 {
-	#define MEMMOVE_RECTFLIPV_GENERIC(type)                                      \
-		{                                                                        \
-			uint8_t* d = (uint8_t*)dst;                                          \
-			uint8_t* s = (uint8_t*)src;                                          \
-			for( size_t line = 0; line < linecnt; ++line )                       \
-			for( size_t item = 0; item < linelen / 2; ++item )                   \
-			{                                                                    \
-				uint8_t* curr_d = d + line * dststride + item;                   \
-				uint8_t* curr_s = s + line * srcstride + ( linelen - item ) - 1; \
-                                                                                 \
-				uint8_t tmp = *curr_d;                                           \
-				*curr_d  = *curr_s;                                              \
-				*curr_s  = tmp;                                                  \
-			}                                                                    \
+	// TODO: handle alignment of buffers as the macro casts array to different types.
+
+	#define MEMMOVE_RECTFLIPV_GENERIC(type)                                   \
+		{                                                                     \
+			type* d = (type*)dst;                                             \
+			type* s = (type*)src;                                             \
+			for( size_t line = 0; line < linecnt; ++line )                    \
+			for( size_t item = 0; item < linelen / 2; ++item )                \
+			{                                                                 \
+				type* curr_d = d + line * dststride + item;                   \
+				type* curr_s = s + line * srcstride + ( linelen - item ) - 1; \
+                                                                              \
+				type tmp = *curr_d;                                           \
+				*curr_d  = *curr_s;                                           \
+				*curr_s  = tmp;                                               \
+			}                                                                 \
 		}
 
 	switch(item_size)
