@@ -31,18 +31,26 @@
 BUILD_PATH = "local"
 
 config   = "debug"
+compiler = "clang"
+compiler = ScriptArgs["compiler"]
 
 local settings = NewSettings() -- {}
+
+if compiler == "clang" then
+        SetDriversClang(settings)
+elseif compiler == "gcc" then
+        SetDriversGCC(settings)
+end
 
 settings.cc.includes:Add("include")
 if family == 'windows' then
 	platform = "winx64"
 else
 	platform = "linux_x86_64"
-	settings.cc.flags:Add( "-Wconversion", "-Wextra", "-Wall", "-Werror", "-Wstrict-aliasing=2", "-O3" )
+	settings.cc.flags:Add( "-Wconversion", "-Wextra", "-Wall", "-Werror", "-Wstrict-aliasing=2", "-O2" )
 end
 
-local output_path = PathJoin( BUILD_PATH, PathJoin( platform, config ) )
+local output_path = PathJoin( BUILD_PATH, PathJoin( platform, PathJoin( compiler, config ) ) )
 local output_func = function(settings, path) return PathJoin(output_path, PathFilename(PathBase(path)) .. settings.config_ext) end
 settings.cc.Output = output_func
 settings.lib.Output = output_func
