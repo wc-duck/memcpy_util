@@ -30,7 +30,7 @@
 
 BUILD_PATH = "local"
 
-config   = "debug"
+config   = ScriptArgs["config"]
 compiler = "clang"
 compiler = ScriptArgs["compiler"]
 
@@ -47,7 +47,7 @@ if family == 'windows' then
 	platform = "winx64"
 else
 	platform = "linux_x86_64"
-	settings.cc.flags:Add( "-Wconversion", "-Wextra", "-Wall", "-Werror", "-Wstrict-aliasing=2", "-O2" )
+	settings.cc.flags:Add( "-Wconversion", "-Wextra", "-Wall", "-Werror", "-Wstrict-aliasing=2", "-" .. config )
 end
 
 local output_path = PathJoin( BUILD_PATH, PathJoin( platform, PathJoin( compiler, config ) ) )
