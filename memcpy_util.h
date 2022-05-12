@@ -282,11 +282,10 @@ inline void* memmove_rectflipv( void* dst, void* src, size_t linecnt, size_t lin
 //                  Implementations                  //
 ///////////////////////////////////////////////////////
 
-inline void memswap( void* ptr1, void* ptr2, size_t bytes )
-{
-	// TODO: last time I checked this generated really bad code on MSVC and doing a swap in
-	//       'chunks' was a way better way to go for that compiler.
+#include <immintrin.h>
 
+inline void memswap_generic( void* ptr1, void* ptr2, size_t bytes )
+{
 	uint8_t* s1 = (uint8_t*)ptr1;
 	uint8_t* s2 = (uint8_t*)ptr2;
 	for( size_t i = 0; i < bytes; ++i )
@@ -295,6 +294,210 @@ inline void memswap( void* ptr1, void* ptr2, size_t bytes )
 		s1[i] = s2[i];
 		s2[i] = tmp;
 	}
+}
+
+inline void memswap_memcpy( void* ptr1, void* ptr2, size_t bytes )
+{
+	uint8_t* s1 = (uint8_t*)ptr1;
+	uint8_t* s2 = (uint8_t*)ptr2;
+
+	char tmp[256];
+	size_t chunks = bytes / sizeof(tmp);
+	for(size_t i = 0; i < chunks; ++i)
+	{
+		size_t offset = i * sizeof(tmp);
+		memcpy(tmp,         s1 + offset, sizeof(tmp));
+		memcpy(s1 + offset, s2 + offset, sizeof(tmp));
+		memcpy(s2 + offset, tmp,         sizeof(tmp));
+	}
+
+	memcpy(tmp,                       s1 + chunks * sizeof(tmp), bytes % sizeof(tmp) );
+	memcpy(s1 + chunks * sizeof(tmp), s2 + chunks * sizeof(tmp), bytes % sizeof(tmp) );
+	memcpy(s2 + chunks * sizeof(tmp), tmp,                       bytes % sizeof(tmp) );
+}
+
+inline void memswap_memcpy_ptr( void* ptr1, void* ptr2, size_t bytes )
+{
+	void* (*memcpy_ptr)(void*, const void*, size_t s) = memcpy;
+
+	uint8_t* s1 = (uint8_t*)ptr1;
+	uint8_t* s2 = (uint8_t*)ptr2;
+
+	char tmp[256];
+	size_t chunks = bytes / sizeof(tmp);
+	for(size_t i = 0; i < chunks; ++i)
+	{
+		size_t offset = i * sizeof(tmp);
+		memcpy_ptr(tmp,         s1 + offset, sizeof(tmp));
+		memcpy_ptr(s1 + offset, s2 + offset, sizeof(tmp));
+		memcpy_ptr(s2 + offset, tmp,         sizeof(tmp));
+	}
+
+	memcpy_ptr(tmp,                       s1 + chunks * sizeof(tmp), bytes % sizeof(tmp) );
+	memcpy_ptr(s1 + chunks * sizeof(tmp), s2 + chunks * sizeof(tmp), bytes % sizeof(tmp) );
+	memcpy_ptr(s2 + chunks * sizeof(tmp), tmp,                       bytes % sizeof(tmp) );
+}
+
+inline void memswap_sse2( void* ptr1, void* ptr2, size_t bytes )
+{
+	size_t chunks = bytes / sizeof(__m128);
+
+	// swap as much as possible with the sse-registers ...
+	for(size_t i = 0; i < chunks; ++i)
+	{
+		float* src1 = (float*)ptr1 + i * (sizeof(__m128) / sizeof(float));
+		float* src2 = (float*)ptr2 + i * (sizeof(__m128) / sizeof(float));
+
+		__m128 tmp =_mm_loadu_ps(src1);
+		_mm_storeu_ps(src1, _mm_loadu_ps(src2));
+		_mm_storeu_ps(src2, tmp);
+	}
+
+	// ... and swap the remaining bytes with the generic swap ...
+	uint8_t* s1 = (uint8_t*)ptr1 + chunks * sizeof(__m128);
+	uint8_t* s2 = (uint8_t*)ptr2 + chunks * sizeof(__m128);
+	memswap_generic(s1, s2, bytes % sizeof(__m128));
+}
+
+inline void memswap_sse2_unroll( void* ptr1, void* ptr2, size_t bytes )
+{
+	size_t chunks = bytes / sizeof(__m128);
+
+	for(size_t i = 0; i < chunks / 4; ++i)
+	{
+		float* src1_0 = (float*)ptr1 + (i + 0) * (sizeof(__m128) / sizeof(float));
+		float* src1_1 = (float*)ptr1 + (i + 1) * (sizeof(__m128) / sizeof(float));
+		float* src1_2 = (float*)ptr1 + (i + 2) * (sizeof(__m128) / sizeof(float));
+		float* src1_3 = (float*)ptr1 + (i + 3) * (sizeof(__m128) / sizeof(float));
+		float* src2_0 = (float*)ptr2 + (i + 0) * (sizeof(__m128) / sizeof(float));
+		float* src2_1 = (float*)ptr2 + (i + 1) * (sizeof(__m128) / sizeof(float));
+		float* src2_2 = (float*)ptr2 + (i + 2) * (sizeof(__m128) / sizeof(float));
+		float* src2_3 = (float*)ptr2 + (i + 3) * (sizeof(__m128) / sizeof(float));
+		__m128 tmp0 = _mm_loadu_ps(src1_0);
+		__m128 tmp1 = _mm_loadu_ps(src1_1);
+		__m128 tmp2 = _mm_loadu_ps(src1_2);
+		__m128 tmp3 = _mm_loadu_ps(src1_3);
+		_mm_storeu_ps(src1_0, _mm_loadu_ps(src2_0));
+		_mm_storeu_ps(src1_1, _mm_loadu_ps(src2_1));
+		_mm_storeu_ps(src1_2, _mm_loadu_ps(src2_2));
+		_mm_storeu_ps(src1_3, _mm_loadu_ps(src2_3));
+		_mm_storeu_ps(src2_0, tmp0);
+		_mm_storeu_ps(src2_1, tmp1);
+		_mm_storeu_ps(src2_2, tmp2);
+		_mm_storeu_ps(src2_3, tmp3);
+	}
+
+	memswap_sse2((float*)ptr1 + chunks * (sizeof(__m128) / sizeof(float)), 
+				 (float*)ptr2 + chunks * (sizeof(__m128) / sizeof(float)),
+				 bytes - chunks * sizeof(__m128));
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+#   define MEMCPY_UTIL_TARGET_AVX __attribute__((target("avx")))
+#else
+#   define MEMCPY_UTIL_TARGET_AVX
+#endif
+
+MEMCPY_UTIL_TARGET_AVX
+inline void memswap_avx( void* ptr1, void* ptr2, size_t bytes )
+{
+	size_t chunks = bytes / sizeof(__m256);
+
+	// swap as much as possible with the avx-registers ...
+	for(size_t i = 0; i < chunks; ++i)
+	{
+		float* src1 = (float*)ptr1 + i * (sizeof(__m256) / sizeof(float));
+		float* src2 = (float*)ptr2 + i * (sizeof(__m256) / sizeof(float));
+		__m256 tmp  = _mm256_loadu_ps(src1);
+		_mm256_storeu_ps(src1, _mm256_loadu_ps(src2));
+		_mm256_storeu_ps(src2, tmp);
+	}
+
+	// ... and swap the remaining bytes with the generic swap ...
+	uint8_t* s1 = (uint8_t*)ptr1 + chunks * sizeof(__m256);
+	uint8_t* s2 = (uint8_t*)ptr2 + chunks * sizeof(__m256);
+	memswap_generic(s1, s2, bytes % sizeof(__m256));
+}
+
+MEMCPY_UTIL_TARGET_AVX
+inline void memswap_avx_unroll( void* ptr1, void* ptr2, size_t bytes )
+{
+	size_t chunks = bytes / sizeof(__m256);
+
+	for(size_t i = 0; i < chunks / 4; ++i)
+	{
+		float* src1_0 = (float*)ptr1 + (i + 0) * (sizeof(__m256) / sizeof(float));
+		float* src1_1 = (float*)ptr1 + (i + 1) * (sizeof(__m256) / sizeof(float));
+		float* src1_2 = (float*)ptr1 + (i + 2) * (sizeof(__m256) / sizeof(float));
+		float* src1_3 = (float*)ptr1 + (i + 3) * (sizeof(__m256) / sizeof(float));
+		float* src2_0 = (float*)ptr2 + (i + 0) * (sizeof(__m256) / sizeof(float));
+		float* src2_1 = (float*)ptr2 + (i + 1) * (sizeof(__m256) / sizeof(float));
+		float* src2_2 = (float*)ptr2 + (i + 2) * (sizeof(__m256) / sizeof(float));
+		float* src2_3 = (float*)ptr2 + (i + 3) * (sizeof(__m256) / sizeof(float));
+		__m256 tmp0 = _mm256_loadu_ps(src1_0);
+		__m256 tmp1 = _mm256_loadu_ps(src1_1);
+		__m256 tmp2 = _mm256_loadu_ps(src1_2);
+		__m256 tmp3 = _mm256_loadu_ps(src1_3);
+		_mm256_storeu_ps(src1_0, _mm256_loadu_ps(src2_0));
+		_mm256_storeu_ps(src1_1, _mm256_loadu_ps(src2_1));
+		_mm256_storeu_ps(src1_2, _mm256_loadu_ps(src2_2));
+		_mm256_storeu_ps(src1_3, _mm256_loadu_ps(src2_3));
+		_mm256_storeu_ps(src2_0, tmp0);
+		_mm256_storeu_ps(src2_1, tmp1);
+		_mm256_storeu_ps(src2_2, tmp2);
+		_mm256_storeu_ps(src2_3, tmp3);
+	}
+
+
+	// ... and swap the remaining bytes with the generic swap ...
+	memswap_avx((float*)ptr1 + chunks * (sizeof(__m256) / sizeof(float)), 
+				(float*)ptr2 + chunks * (sizeof(__m256) / sizeof(float)),
+				bytes - chunks * sizeof(__m256));
+}
+
+inline bool memcpy_util_has_avx()
+{
+#if defined(_MSC_VER)
+	return false; // TODO: implement for MSVC
+#else
+	return __builtin_cpu_supports("avx");
+#endif
+}
+
+inline bool memcpy_util_has_sse2()
+{
+#if defined(_MSC_VER)
+	return false; // TODO: implement for MSVC
+#else
+	return __builtin_cpu_supports("sse2");
+#endif
+}
+
+#if defined(__AVX__)
+#  define MEMCPY_UTIL_HAS_AVX
+#endif
+
+#if defined(__SSE2__)
+#  define MEMCPY_UTIL_HAS_SSE2
+#endif
+
+inline void memswap( void* ptr1, void* ptr2, size_t bytes )
+{
+#if defined(MEMCPY_UTIL_HAS_AVX)
+	memswap_avx_unroll(ptr1, ptr2, bytes);
+#elif defined(MEMCPY_UTIL_HAS_SSE2)
+	if(memcpy_util_has_avx())
+		memswap_avx_unroll(ptr1, ptr2, bytes);
+	else
+		memswap_sse2_unroll(ptr1, ptr2, bytes);
+#else
+	if(memcpy_util_has_avx())
+		memswap_avx_unroll(ptr1, ptr2, bytes);
+	else if(memcpy_util_has_sse2())
+		memswap_sse2_unroll(ptr1, ptr2, bytes);
+	else
+		memswap_memcpy(ptr1, ptr2, bytes);
+#endif
 }
 
 inline void* memcpy_rect( void* dst, void* src, size_t lines, size_t linelen, size_t dststride, size_t srcstride )
@@ -514,7 +717,7 @@ inline void* memmove_rectrotl_x( void* dst, void* src, size_t linecnt, size_t li
 
 inline void* memcpy_rectfliph( void* dst, void* src, size_t linecnt, size_t linelen, size_t dststride, size_t srcstride, size_t item_size )
 {
-	// TODO: this is slower than the memmove_-version in non-debug build as GCC inserts a call to memcpy instead of inlining it, making 
+	// TODO: this is slower than the memmove_-version in non-debug build as GCC inserts a call to memcpy instead of inlining it, making
 	//       memswap() the faster alternative!
 	uint8_t* d = (uint8_t*)dst;
 	uint8_t* s = (uint8_t*)src;

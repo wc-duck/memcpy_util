@@ -36,8 +36,7 @@
 
 static void fill_with_random_data(uint8_t *arr, size_t size)
 {
-    for(size_t i = 0; i < size; ++i)
-        arr[i] = (uint8_t)rand();
+    memset(arr, rand(), size);
 }
 
 template<typename T, size_t ARR_SIZE>
@@ -58,33 +57,92 @@ T* alloc_random_buffer(size_t item_cnt)
 //                          memswap                          //
 ///////////////////////////////////////////////////////////////
 
-UBENCH_EX(swap, small)
+UBENCH_NOINLINE void memswap_default_noinline    (void* ptr1, void* ptr2, size_t s) { memswap            (ptr1, ptr2, s); }
+UBENCH_NOINLINE void memswap_generic_noinline    (void* ptr1, void* ptr2, size_t s) { memswap_generic    (ptr1, ptr2, s); }
+UBENCH_NOINLINE void memswap_memcpy_noinline     (void* ptr1, void* ptr2, size_t s) { memswap_memcpy     (ptr1, ptr2, s); }
+UBENCH_NOINLINE void memswap_memcpy_ptr_noinline (void* ptr1, void* ptr2, size_t s) { memswap_memcpy_ptr (ptr1, ptr2, s); }
+UBENCH_NOINLINE void memswap_sse2_noinline       (void* ptr1, void* ptr2, size_t s) { memswap_sse2       (ptr1, ptr2, s); }
+UBENCH_NOINLINE void memswap_sse2_unroll_noinline(void* ptr1, void* ptr2, size_t s) { memswap_sse2_unroll(ptr1, ptr2, s); }
+UBENCH_NOINLINE void memswap_avx_noinline        (void* ptr1, void* ptr2, size_t s) { memswap_avx        (ptr1, ptr2, s); }
+UBENCH_NOINLINE void memswap_avx_unroll_noinline (void* ptr1, void* ptr2, size_t s) { memswap_avx_unroll (ptr1, ptr2, s); }
+
+#include <algorithm>
+UBENCH_NOINLINE void memswap_std_swap_ranges_noinline(void* ptr1, void* ptr2, size_t s) { std::swap_ranges((uint8_t*)ptr1, (uint8_t*)ptr1 + s, (uint8_t*)ptr2); }
+UBENCH_NOINLINE void memswap_memcpy_only_noinline    (void* ptr1, void* ptr2, size_t s) { memcpy(ptr1, ptr2, s); }
+
+struct memswap_small
 {
-	uint8_t b1[16];
+    uint8_t b1[16];
     uint8_t b2[16];
-    fill_with_random_data(b1);
-    fill_with_random_data(b2);
+};
 
-	UBENCH_DO_BENCHMARK()
-	{
-		memswap(b1, b2, sizeof(b1));
-        UBENCH_DO_NOTHING(b1);
-	}
-}
+UBENCH_NOINLINE void* clear_cache_alloc() { return alloc_random_buffer<uint8_t>(32*1024*1024); }
+UBENCH_NOINLINE void  clear_cache()       { free(clear_cache_alloc()); }
 
-UBENCH_EX(swap, big)
+#define BENCH_MEMSWAP_SMALL(TYPE)                          \
+    UBENCH_EX(memswap_small, TYPE)                         \
+    {                                                      \
+        uint8_t b1[16];                                    \
+        uint8_t b2[16];                                    \
+        fill_with_random_data(b1);                         \
+        fill_with_random_data(b2);                         \
+        clear_cache();                                     \
+                                                           \
+        UBENCH_DO_BENCHMARK()                              \
+        {                                                  \
+            memswap_##TYPE##_noinline(b1, b2, sizeof(b1)); \
+        }                                                  \
+    }
+
+#define BENCH_MEMSWAP_BIG(TYPE)                             \
+    UBENCH_EX(memswap_big, TYPE)                            \
+    {                                                       \
+        const size_t BUF_SZ = 4 * 1024 * 1024;              \
+        uint8_t* b1 = alloc_random_buffer<uint8_t>(BUF_SZ); \
+        uint8_t* b2 = alloc_random_buffer<uint8_t>(BUF_SZ); \
+        clear_cache();                                      \
+        UBENCH_DO_BENCHMARK()                               \
+        {                                                   \
+            memswap_##TYPE##_noinline(b1, b2, BUF_SZ);      \
+        }                                                   \
+        free(b1);                                           \
+        free(b2);                                           \
+    }
+
+BENCH_MEMSWAP_SMALL(default)
+BENCH_MEMSWAP_SMALL(generic)
+BENCH_MEMSWAP_SMALL(memcpy)
+BENCH_MEMSWAP_SMALL(memcpy_ptr)
+BENCH_MEMSWAP_SMALL(sse2)
+BENCH_MEMSWAP_SMALL(sse2_unroll)
+BENCH_MEMSWAP_SMALL(avx)
+BENCH_MEMSWAP_SMALL(avx_unroll)
+
+BENCH_MEMSWAP_SMALL(std_swap_ranges)
+BENCH_MEMSWAP_SMALL(memcpy_only)
+
+BENCH_MEMSWAP_BIG(default)
+BENCH_MEMSWAP_BIG(generic)
+BENCH_MEMSWAP_BIG(memcpy)
+BENCH_MEMSWAP_BIG(memcpy_ptr)
+BENCH_MEMSWAP_BIG(sse2)
+BENCH_MEMSWAP_BIG(sse2_unroll)
+BENCH_MEMSWAP_BIG(avx)
+BENCH_MEMSWAP_BIG(avx_unroll)
+
+BENCH_MEMSWAP_BIG(std_swap_ranges)
+BENCH_MEMSWAP_BIG(memcpy_only)
+
+UBENCH_EX(memswap_stack, test)
 {
-    const size_t BUF_SZ = 2048 * 2048;
-	uint8_t* b1 = alloc_random_buffer<uint8_t>(BUF_SZ);
-    uint8_t* b2 = alloc_random_buffer<uint8_t>(BUF_SZ);
-
+    char buff1[16*1024];
+    char buff2[16*1024];
 	UBENCH_DO_BENCHMARK()
-	{
-		memswap(b1, b2, BUF_SZ);
-	}
-
-    free(b1);
-    free(b2);
+    {
+        memswap_sse2_noinline(buff1, buff2, sizeof(buff1));
+        UBENCH_DO_NOTHING(buff1);
+        UBENCH_DO_NOTHING(buff2);
+    }
 }
 
 ///////////////////////////////////////////////////////////////
