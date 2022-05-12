@@ -57,6 +57,8 @@ TEST memswap_simple()
 	return GREATEST_TEST_RES_PASS;
 }
 
+// TODO: add test for memcpy, sse2 and avx-versions, bigger and smaller!
+
 ///////////////////////////////////////////////////////////////
 //                        memcpy_rect                        //
 ///////////////////////////////////////////////////////////////
