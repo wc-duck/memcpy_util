@@ -70,12 +70,6 @@ UBENCH_NOINLINE void memswap_avx_unroll_noinline (void* ptr1, void* ptr2, size_t
 UBENCH_NOINLINE void memswap_std_swap_ranges_noinline(void* ptr1, void* ptr2, size_t s) { std::swap_ranges((uint8_t*)ptr1, (uint8_t*)ptr1 + s, (uint8_t*)ptr2); }
 UBENCH_NOINLINE void memswap_memcpy_only_noinline    (void* ptr1, void* ptr2, size_t s) { memcpy(ptr1, ptr2, s); }
 
-struct memswap_small
-{
-    uint8_t b1[16];
-    uint8_t b2[16];
-};
-
 UBENCH_NOINLINE void* clear_cache_alloc() { return alloc_random_buffer<uint8_t>(32*1024*1024); }
 UBENCH_NOINLINE void  clear_cache()       { free(clear_cache_alloc()); }
 
@@ -94,21 +88,27 @@ UBENCH_NOINLINE void  clear_cache()       { free(clear_cache_alloc()); }
         }                                                  \
     }
 
-#define BENCH_MEMSWAP_BIG(TYPE)                             \
-    UBENCH_EX(memswap_big, TYPE)                            \
+#define BENCH_MEMSWAP_SIZE(NAME, TYPE, BUFSIZE)             \
+    UBENCH_EX(NAME, TYPE)                                   \
     {                                                       \
-        const size_t BUF_SZ = 4 * 1024 * 1024;              \
-        uint8_t* b1 = alloc_random_buffer<uint8_t>(BUF_SZ); \
-        uint8_t* b2 = alloc_random_buffer<uint8_t>(BUF_SZ); \
+        const size_t BUF_SZ = BUFSIZE;                      \
+        uint8_t sb1[512];                                   \
+        uint8_t sb2[512];                                   \
+        uint8_t* b1 = BUFSIZE <= sizeof(sb1) ? sb1 : alloc_random_buffer<uint8_t>(BUF_SZ); \
+        uint8_t* b2 = BUFSIZE <= sizeof(sb2) ? sb2 : alloc_random_buffer<uint8_t>(BUF_SZ); \
         clear_cache();                                      \
         UBENCH_DO_BENCHMARK()                               \
         {                                                   \
             memswap_##TYPE##_noinline(b1, b2, BUF_SZ);      \
         }                                                   \
-        free(b1);                                           \
-        free(b2);                                           \
+        if(BUFSIZE > sizeof(sb1)) free(b1);                                           \
+        if(BUFSIZE > sizeof(sb2)) free(b2);                                           \
     }
 
+#define BENCH_MEMSWAP_BIG(TYPE) \
+    BENCH_MEMSWAP_SIZE(memswap_big, TYPE, 4 * 1024 * 1024)
+
+#if 1
 BENCH_MEMSWAP_SMALL(default)
 BENCH_MEMSWAP_SMALL(generic)
 BENCH_MEMSWAP_SMALL(memcpy)
@@ -251,17 +251,69 @@ UBENCH_EX(memmove_rectflipv, uint8_t)  { BENCH_MEMMOVE_RECTFLIPV_SIZE( uint8_t, 
 UBENCH_EX(memmove_rectflipv, uint16_t) { BENCH_MEMMOVE_RECTFLIPV_SIZE(uint16_t, 1024, 2048); }
 UBENCH_EX(memmove_rectflipv, uint32_t) { BENCH_MEMMOVE_RECTFLIPV_SIZE(uint32_t, 1024, 1024); }
 UBENCH_EX(memmove_rectflipv, uint64_t) { BENCH_MEMMOVE_RECTFLIPV_SIZE(uint64_t,  512, 1024); }
+#endif
 // TODO: benchmark "uneven size items!"
 
+
+// over sizes ...
+#if 0
+#define BENCH_MEMSWAP_ALL(NAME, BUFSIZE)     \
+    BENCH_MEMSWAP_SIZE(NAME, generic,         BUFSIZE) \
+    BENCH_MEMSWAP_SIZE(NAME, memcpy,          BUFSIZE) \
+    BENCH_MEMSWAP_SIZE(NAME, memcpy_ptr,      BUFSIZE) \
+    BENCH_MEMSWAP_SIZE(NAME, sse2,            BUFSIZE) \
+    BENCH_MEMSWAP_SIZE(NAME, sse2_unroll,     BUFSIZE) \
+    BENCH_MEMSWAP_SIZE(NAME, avx,             BUFSIZE) \
+    BENCH_MEMSWAP_SIZE(NAME, avx_unroll,      BUFSIZE) \
+    BENCH_MEMSWAP_SIZE(NAME, std_swap_ranges, BUFSIZE) \
+    BENCH_MEMSWAP_SIZE(NAME, memcpy_only,     BUFSIZE)
+
+size_t kb(size_t cnt)
+{
+    return cnt * 1024llu;
+}
+
+size_t mb(size_t cnt)
+{
+    return cnt * 1024llu * 1024llu;
+}
+
+size_t gb(size_t cnt)
+{
+    return cnt * 1024llu * 1024llu * 1024llu;
+}
+
+BENCH_MEMSWAP_ALL(memswap_16b,    16)
+BENCH_MEMSWAP_ALL(memswap_32b,    32)
+BENCH_MEMSWAP_ALL(memswap_64b,    64)
+BENCH_MEMSWAP_ALL(memswap_128b,  128)
+BENCH_MEMSWAP_ALL(memswap_256b,  256)
+BENCH_MEMSWAP_ALL(memswap_512b,  512)
+BENCH_MEMSWAP_ALL(memswap_16kb,  kb( 16))
+BENCH_MEMSWAP_ALL(memswap_32kb,  kb( 32))
+BENCH_MEMSWAP_ALL(memswap_64kb,  kb( 64))
+BENCH_MEMSWAP_ALL(memswap_128kb, kb(128))
+BENCH_MEMSWAP_ALL(memswap_256kb, kb(256))
+BENCH_MEMSWAP_ALL(memswap_512kb, kb(512))
+BENCH_MEMSWAP_ALL(memswap_1MB,   mb(  1))
+BENCH_MEMSWAP_ALL(memswap_4MB,   mb(  4))
+BENCH_MEMSWAP_ALL(memswap_16MB,  mb( 16))
+BENCH_MEMSWAP_ALL(memswap_32MB,  mb( 32))
+BENCH_MEMSWAP_ALL(memswap_64MB,  mb( 64))
+BENCH_MEMSWAP_ALL(memswap_128MB, mb(128))
+BENCH_MEMSWAP_ALL(memswap_512MB, mb(512))
+BENCH_MEMSWAP_ALL(memswap_1GB,   gb(  1))
+BENCH_MEMSWAP_ALL(memswap_2GB,   gb(  2))
+#endif
 
 UBENCH_STATE();
 
 int main(int argc, const char *const argv[])
 {
 #if defined(__clang__)
-    printf("Clang\n");
+    printf("Clang " __VERSION__ "\n");
 #elif defined(__GNUC__)
-    printf("GCC\n");
+    printf("GCC " __VERSION__ "\n");
 #endif
     srand(1337);
     return ubench_main(argc, argv);
