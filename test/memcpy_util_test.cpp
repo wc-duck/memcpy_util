@@ -117,6 +117,64 @@ TEST memswap_many_sizes()
 	return res;
 }
 
+TEST memswap_unaligned()
+{
+	size_t max_size = 512;
+	uint8_t* expect_a = (uint8_t*)malloc(max_size);
+	uint8_t* expect_b = (uint8_t*)malloc(max_size);
+	uint8_t* buf_a    = (uint8_t*)malloc(max_size);
+	uint8_t* buf_b    = (uint8_t*)malloc(max_size);
+
+	#define INIT_BUFFERS \
+		memcpy(buf_a, expect_a, max_size); \
+		memcpy(buf_b, expect_b, max_size);
+
+	#define CHECK_BUFFERS \
+		ASSERT_MEM_EQ(buf_a + i, expect_b + i, max_size - i); \
+		ASSERT_MEM_EQ(buf_b + i, expect_a + i, max_size - i);
+
+	GREATEST_TEST res = GREATEST_TEST_RES_PASS;
+	for(size_t i = 0; i < 64; ++i )
+	{
+		{
+			INIT_BUFFERS
+			memswap(buf_a + i, buf_b + i, max_size - i);
+			CHECK_BUFFERS
+		}
+
+		{
+			INIT_BUFFERS
+			memswap_sse2(buf_a + i, buf_b + i, max_size - i);
+			CHECK_BUFFERS
+		}
+
+		{
+			INIT_BUFFERS
+			memswap_sse2_unroll(buf_a + i, buf_b + i, max_size - i);
+			CHECK_BUFFERS
+		}
+
+		{
+			INIT_BUFFERS
+			memswap_avx(buf_a + i, buf_b + i, max_size - i);
+			CHECK_BUFFERS
+		}
+
+		{
+			INIT_BUFFERS
+			memswap_avx_unroll(buf_a + i, buf_b + i, max_size - i);
+			CHECK_BUFFERS
+		}
+	}
+
+	free(expect_a);
+	free(expect_b);
+	free(buf_a);
+	free(buf_b);
+
+	return res;
+}
+
 // TODO: add test for memcpy, sse2 and avx-versions, bigger and smaller!
 
 ///////////////////////////////////////////////////////////////
@@ -811,6 +869,7 @@ GREATEST_SUITE( swap )
 {
 	RUN_TEST( memswap_simple     );
 	RUN_TEST( memswap_many_sizes );
+	RUN_TEST( memswap_unaligned  );
 }
 
 GREATEST_SUITE( rect )
