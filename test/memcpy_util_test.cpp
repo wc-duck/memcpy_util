@@ -57,6 +57,66 @@ TEST memswap_simple()
 	return GREATEST_TEST_RES_PASS;
 }
 
+TEST memswap_many_sizes()
+{
+	size_t max_size = 512;
+	uint8_t* expect_a = (uint8_t*)malloc(max_size);
+	uint8_t* expect_b = (uint8_t*)malloc(max_size);
+	uint8_t* buf_a    = (uint8_t*)malloc(max_size);
+	uint8_t* buf_b    = (uint8_t*)malloc(max_size);
+
+	GREATEST_TEST res = GREATEST_TEST_RES_PASS;
+	for(size_t i = 0; i < 512; ++i )
+	{
+		{
+			memcpy(buf_a, expect_a, i);
+			memcpy(buf_b, expect_b, i);
+			memswap(buf_a, buf_b, i);
+			ASSERT_MEMEQ(buf_a, expect_b);
+			ASSERT_MEMEQ(buf_b, expect_a);
+		}
+
+		{
+			memcpy(buf_a, expect_a, i);
+			memcpy(buf_b, expect_b, i);
+			memswap_sse2(buf_a, buf_b, i);
+			ASSERT_MEMEQ(buf_a, expect_b);
+			ASSERT_MEMEQ(buf_b, expect_a);
+		}
+
+		{
+			memcpy(buf_a, expect_a, i);
+			memcpy(buf_b, expect_b, i);
+			memswap_sse2_unroll(buf_a, buf_b, i);
+			ASSERT_MEMEQ(buf_a, expect_b);
+			ASSERT_MEMEQ(buf_b, expect_a);
+		}
+
+		{
+			memcpy(buf_a, expect_a, i);
+			memcpy(buf_b, expect_b, i);
+			memswap_avx(buf_a, buf_b, i);
+			ASSERT_MEMEQ(buf_a, expect_b);
+			ASSERT_MEMEQ(buf_b, expect_a);
+		}
+
+		{
+			memcpy(buf_a, expect_a, i);
+			memcpy(buf_b, expect_b, i);
+			memswap_avx_unroll(buf_a, buf_b, i);
+			ASSERT_MEMEQ(buf_a, expect_b);
+			ASSERT_MEMEQ(buf_b, expect_a);
+		}
+	}
+
+	free(expect_a);
+	free(expect_b);
+	free(buf_a);
+	free(buf_b);
+
+	return res;
+}
+
 // TODO: add test for memcpy, sse2 and avx-versions, bigger and smaller!
 
 ///////////////////////////////////////////////////////////////
@@ -749,7 +809,8 @@ TEST memmove_rectflipv_subrect()
 
 GREATEST_SUITE( swap )
 {
-	RUN_TEST( memswap_simple );
+	RUN_TEST( memswap_simple     );
+	RUN_TEST( memswap_many_sizes );
 }
 
 GREATEST_SUITE( rect )

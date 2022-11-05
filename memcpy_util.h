@@ -284,6 +284,12 @@ inline void* memmove_rectflipv( void* dst, void* src, size_t linecnt, size_t lin
 
 #include <immintrin.h>
 
+#if defined(__GNUC__) || defined(__clang__)
+#   define MEMCPY_UTIL_TARGET_AVX __attribute__((target("avx")))
+#else
+#   define MEMCPY_UTIL_TARGET_AVX
+#endif
+;
 inline void memswap_generic( void* ptr1, void* ptr2, size_t bytes )
 {
 	uint8_t* s1 = (uint8_t*)ptr1;
@@ -359,45 +365,6 @@ inline void memswap_sse2( void* ptr1, void* ptr2, size_t bytes )
 	memswap_generic(s1, s2, bytes % sizeof(__m128));
 }
 
-inline void memswap_sse2_unroll( void* ptr1, void* ptr2, size_t bytes )
-{
-	size_t chunks = bytes / sizeof(__m128);
-
-	for(size_t i = 0; i < chunks / 4; ++i)
-	{
-		float* src1_0 = (float*)ptr1 + (i + 0) * (sizeof(__m128) / sizeof(float));
-		float* src1_1 = (float*)ptr1 + (i + 1) * (sizeof(__m128) / sizeof(float));
-		float* src1_2 = (float*)ptr1 + (i + 2) * (sizeof(__m128) / sizeof(float));
-		float* src1_3 = (float*)ptr1 + (i + 3) * (sizeof(__m128) / sizeof(float));
-		float* src2_0 = (float*)ptr2 + (i + 0) * (sizeof(__m128) / sizeof(float));
-		float* src2_1 = (float*)ptr2 + (i + 1) * (sizeof(__m128) / sizeof(float));
-		float* src2_2 = (float*)ptr2 + (i + 2) * (sizeof(__m128) / sizeof(float));
-		float* src2_3 = (float*)ptr2 + (i + 3) * (sizeof(__m128) / sizeof(float));
-		__m128 tmp0 = _mm_loadu_ps(src1_0);
-		__m128 tmp1 = _mm_loadu_ps(src1_1);
-		__m128 tmp2 = _mm_loadu_ps(src1_2);
-		__m128 tmp3 = _mm_loadu_ps(src1_3);
-		_mm_storeu_ps(src1_0, _mm_loadu_ps(src2_0));
-		_mm_storeu_ps(src1_1, _mm_loadu_ps(src2_1));
-		_mm_storeu_ps(src1_2, _mm_loadu_ps(src2_2));
-		_mm_storeu_ps(src1_3, _mm_loadu_ps(src2_3));
-		_mm_storeu_ps(src2_0, tmp0);
-		_mm_storeu_ps(src2_1, tmp1);
-		_mm_storeu_ps(src2_2, tmp2);
-		_mm_storeu_ps(src2_3, tmp3);
-	}
-
-	memswap_sse2((float*)ptr1 + chunks * (sizeof(__m128) / sizeof(float)), 
-				 (float*)ptr2 + chunks * (sizeof(__m128) / sizeof(float)),
-				 bytes - chunks * sizeof(__m128));
-}
-
-#if defined(__GNUC__) || defined(__clang__)
-#   define MEMCPY_UTIL_TARGET_AVX __attribute__((target("avx")))
-#else
-#   define MEMCPY_UTIL_TARGET_AVX
-#endif
-
 MEMCPY_UTIL_TARGET_AVX
 inline void memswap_avx( void* ptr1, void* ptr2, size_t bytes )
 {
@@ -419,21 +386,56 @@ inline void memswap_avx( void* ptr1, void* ptr2, size_t bytes )
 	memswap_generic(s1, s2, bytes % sizeof(__m256));
 }
 
+inline void memswap_sse2_unroll( void* ptr1, void* ptr2, size_t bytes )
+{
+	size_t chunks = bytes / (sizeof(__m128) * 4);
+
+	for(size_t i = 0; i < chunks; ++i)
+	{
+		float* src1_0 = (float*)((uint8_t*)ptr1 + (i * 4 + 0) * sizeof(__m128));
+		float* src1_1 = (float*)((uint8_t*)ptr1 + (i * 4 + 1) * sizeof(__m128));
+		float* src1_2 = (float*)((uint8_t*)ptr1 + (i * 4 + 2) * sizeof(__m128));
+		float* src1_3 = (float*)((uint8_t*)ptr1 + (i * 4 + 3) * sizeof(__m128));
+		float* src2_0 = (float*)((uint8_t*)ptr2 + (i * 4 + 0) * sizeof(__m128));
+		float* src2_1 = (float*)((uint8_t*)ptr2 + (i * 4 + 1) * sizeof(__m128));
+		float* src2_2 = (float*)((uint8_t*)ptr2 + (i * 4 + 2) * sizeof(__m128));
+		float* src2_3 = (float*)((uint8_t*)ptr2 + (i * 4 + 3) * sizeof(__m128));
+		__m128 tmp0 = _mm_loadu_ps(src1_0);
+		__m128 tmp1 = _mm_loadu_ps(src1_1);
+		__m128 tmp2 = _mm_loadu_ps(src1_2);
+		__m128 tmp3 = _mm_loadu_ps(src1_3);
+		_mm_storeu_ps(src1_0, _mm_loadu_ps(src2_0));
+		_mm_storeu_ps(src1_1, _mm_loadu_ps(src2_1));
+		_mm_storeu_ps(src1_2, _mm_loadu_ps(src2_2));
+		_mm_storeu_ps(src1_3, _mm_loadu_ps(src2_3));
+		_mm_storeu_ps(src2_0, tmp0);
+		_mm_storeu_ps(src2_1, tmp1);
+		_mm_storeu_ps(src2_2, tmp2);
+		_mm_storeu_ps(src2_3, tmp3);
+	}
+
+	// ... and swap the remaining bytes with the generic swap ...
+	size_t bytes_processed = (chunks * 4) * sizeof(__m128);
+	memswap_sse2((uint8_t*)ptr1  + bytes_processed,
+				 (uint8_t*)ptr2  + bytes_processed,
+				 bytes - bytes_processed);
+}
+
 MEMCPY_UTIL_TARGET_AVX
 inline void memswap_avx_unroll( void* ptr1, void* ptr2, size_t bytes )
 {
-	size_t chunks = bytes / sizeof(__m256);
+	size_t chunks = bytes / (sizeof(__m256) * 4);
 
-	for(size_t i = 0; i < chunks / 4; ++i)
+	for(size_t i = 0; i < chunks; ++i)
 	{
-		float* src1_0 = (float*)ptr1 + (i + 0) * (sizeof(__m256) / sizeof(float));
-		float* src1_1 = (float*)ptr1 + (i + 1) * (sizeof(__m256) / sizeof(float));
-		float* src1_2 = (float*)ptr1 + (i + 2) * (sizeof(__m256) / sizeof(float));
-		float* src1_3 = (float*)ptr1 + (i + 3) * (sizeof(__m256) / sizeof(float));
-		float* src2_0 = (float*)ptr2 + (i + 0) * (sizeof(__m256) / sizeof(float));
-		float* src2_1 = (float*)ptr2 + (i + 1) * (sizeof(__m256) / sizeof(float));
-		float* src2_2 = (float*)ptr2 + (i + 2) * (sizeof(__m256) / sizeof(float));
-		float* src2_3 = (float*)ptr2 + (i + 3) * (sizeof(__m256) / sizeof(float));
+		float* src1_0 = (float*)((uint8_t*)ptr1 + (i * 4 + 0) * sizeof(__m256));
+		float* src1_1 = (float*)((uint8_t*)ptr1 + (i * 4 + 1) * sizeof(__m256));
+		float* src1_2 = (float*)((uint8_t*)ptr1 + (i * 4 + 2) * sizeof(__m256));
+		float* src1_3 = (float*)((uint8_t*)ptr1 + (i * 4 + 3) * sizeof(__m256));
+		float* src2_0 = (float*)((uint8_t*)ptr2 + (i * 4 + 0) * sizeof(__m256));
+		float* src2_1 = (float*)((uint8_t*)ptr2 + (i * 4 + 1) * sizeof(__m256));
+		float* src2_2 = (float*)((uint8_t*)ptr2 + (i * 4 + 2) * sizeof(__m256));
+		float* src2_3 = (float*)((uint8_t*)ptr2 + (i * 4 + 3) * sizeof(__m256));
 		__m256 tmp0 = _mm256_loadu_ps(src1_0);
 		__m256 tmp1 = _mm256_loadu_ps(src1_1);
 		__m256 tmp2 = _mm256_loadu_ps(src1_2);
@@ -448,12 +450,12 @@ inline void memswap_avx_unroll( void* ptr1, void* ptr2, size_t bytes )
 		_mm256_storeu_ps(src2_3, tmp3);
 	}
 
-
 	// ... and swap the remaining bytes with the generic swap ...
-	memswap_avx((float*)ptr1 + chunks * (sizeof(__m256) / sizeof(float)), 
-				(float*)ptr2 + chunks * (sizeof(__m256) / sizeof(float)),
-				bytes - chunks * sizeof(__m256));
-}
+	size_t bytes_processed = (chunks * 4) * sizeof(__m256);
+	memswap_avx((uint8_t*)ptr1  + bytes_processed,
+				(uint8_t*)ptr2  + bytes_processed,
+				bytes - bytes_processed);
+};
 
 inline bool memcpy_util_has_avx()
 {
