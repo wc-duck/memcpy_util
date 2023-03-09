@@ -5,9 +5,9 @@
  versions trade performance for being able to work within overlapping
  memory regions.
 
- version 1.0, January, 2021
+ version 1.0, March, 2023
 
- Copyright (C) 2021- Fredrik Kihlander
+ Copyright (C) 2023- Fredrik Kihlander
 
  This software is provided 'as-is', without any express or implied
  warranty.  In no event will the authors be held liable for any damages
